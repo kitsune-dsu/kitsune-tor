@@ -1,0 +1,96 @@
+{
+#include <kitsune.h>
+#include "dsu.h"
+#include "or.h"
+
+#define V0 "/home/tedks/Projects/plum/workdir/examples/tor/tor-0.2.1.18/src/or/tor-update.so"
+#define V1 "/home/tedks/Projects/plum/workdir/examples/tor/tor-0.2.1.19/src/or/tor-update.so"
+
+void
+migrate_connection_smartlist(smartlist_t *connection_list)
+{
+  int was_reading, was_writing;
+  void * conn_read_callback = 
+    kitsune_lookup_key_new("main.c/conn_read_callback");
+  void * conn_write_callback = 
+    kitsune_lookup_key_new("main.c/conn_write_callback");
+  
+  SMARTLIST_FOREACH(connection_list, connection_t *, conn, 
+                    {
+                      was_reading = was_writing = 0;
+                      log_debug(LD_DSU, "Migrating event for fd %d, type %s",
+                                conn->s, conn_type_to_string(conn->type));
+
+                      conn->read_event->ev_callback = conn_read_callback;
+                      conn->write_event->ev_callback = conn_write_callback;
+                      migrate_or_conn(conn);
+                    });
+}
+
+void
+migrate_or_conn(connection_t * conn)
+{
+  if (conn->magic != OR_CONNECTION_MAGIC)
+    return;
+
+  or_connection_t *or_conn = TO_OR_CONN(conn);
+  void * always_accept_verify_cb = 
+    kitsune_lookup_key_new("tortls.c/always_accept_verify_cb");
+  if (or_conn->tls == NULL)
+    return;
+  /* we need to reset the SSL callback */
+  log_debug(LD_DSU, "writing %p's callback to %p", conn, 
+            always_accept_verify_cb);
+  SSL_set_verify(or_conn->tls->ssl, SSL_VERIFY_PEER, 
+                 always_accept_verify_cb);
+  if (or_conn->tls->negotiated_callback)
+    tor_tls_set_renegotiate_callback(or_conn->tls,
+                                     kitsune_lookup_key_new("connection_or.c/connection_or_tls_renegotiated_cb"),
+                                     or_conn);
+}
+
+}
+
+
+struct event.ev_base -> struct event.ev_base, 
+  struct event.ev_arg -> struct event.ev_arg,
+  struct evdns_request.user_pointer -> struct evdns_request.user_pointer,
+  struct evdns_server_port.user_data -> struct evdns_server_port.user_data:
+{
+  memcpy($out, $in, sizeof($in));
+}
+
+typedef mp_allocated_t -> typedef mp_allocated_t,
+  struct mp_allocated_t -> struct mp_allocated_t,
+  union __anonunion_u_57 ->   union __anonunion_u_57: {}
+
+struct tor_tls_t -> struct tor_tls_t: {
+  memcpy(&$out, &$in, sizeof($out));
+}
+
+struct server_request -> struct server_request: {
+  memcpy(&$out, &$in, sizeof($out));
+}
+
+main.c/connection_array -> main.c/connection_array,
+  main.c/active_linked_connection_lst ->  main.c/active_linked_connection_lst,
+  main.c/closeable_connection_lst -> main.c/closeable_connection_lst: {
+  
+  memcpy($out, $in, sizeof($in));
+  migrate_connection_smartlist($out);
+}
+
+
+eventdns.c/req_head -> eventdns.c/req_head,
+  eventdns.c/req_waiting_head -> eventdns.c/req_waiting_head: {
+
+}
+
+tortls.c/global_tls_context -> tortls.c/global_tls_context: {
+  void * always_accept_verify_cb =
+    kitsune_lookup_key_new("tortls.c/always_accept_verify_cb");
+  
+  memcpy($out, $in, sizeof($in));
+  SSL_CTX_set_verify($out->ctx, SSL_VERIFY_PEER,
+		     always_accept_verify_cb);
+}

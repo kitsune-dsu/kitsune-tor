@@ -1,0 +1,11 @@
+--- /etc/polipo/config	2011-06-20 13:35:38.540116897 -0400
++++ /etc/polipo/config-2	2011-06-20 13:35:53.820116902 -0400
+@@ -34,7 +34,7 @@
+ 
+ # Uncomment this if you want to use a parent SOCKS proxy:
+ 
+-socksParentProxy = "localhost:9050"
++socksParentProxy = "localhost:9055"
+ socksProxyType = socks5
+ 
+ 

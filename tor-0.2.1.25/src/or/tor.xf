@@ -1,0 +1,181 @@
+{
+#include <kitsune.h>
+#include "dsu.h"
+#include "or.h"
+
+void
+migrate_connection_smartlist(smartlist_t *connection_list)
+{
+  int was_reading, was_writing;
+  void * conn_read_callback = 
+    kitsune_lookup_key_new("main.c/conn_read_callback");
+  void * conn_write_callback = 
+    kitsune_lookup_key_new("main.c/conn_write_callback");
+  
+  SMARTLIST_FOREACH(connection_list, connection_t *, conn, 
+                    {
+                      was_reading = was_writing = 0;
+                      log_debug(LD_DSU, "Migrating event for fd %d, type %s",
+                                conn->s, conn_type_to_string(conn->type));
+
+                      conn->read_event->ev_callback = conn_read_callback;
+                      conn->write_event->ev_callback = conn_write_callback;
+                      migrate_or_conn(conn);
+		      migrate_dns_conn(conn);
+                    });
+}
+
+void
+migrate_or_conn(connection_t * conn)
+{
+  if (conn->magic != OR_CONNECTION_MAGIC)
+    return;
+
+  or_connection_t *or_conn = TO_OR_CONN(conn);
+  void * always_accept_verify_cb = 
+    kitsune_lookup_key_new("tortls.c/always_accept_verify_cb");
+  if (or_conn->tls == NULL)
+    return;
+  /* we need to reset the SSL callback */
+  log_debug(LD_DSU, "writing %p's callback to %p", conn, 
+            always_accept_verify_cb);
+  SSL_set_verify(or_conn->tls->ssl, SSL_VERIFY_PEER, 
+                 always_accept_verify_cb);
+  if (or_conn->tls->negotiated_callback)
+    tor_tls_set_renegotiate_callback(or_conn->tls,
+                                     kitsune_lookup_key_new("connection_or.c/connection_or_tls_renegotiated_cb"),
+                                     or_conn);
+}
+
+void 
+migrate_dns_conn(connection_t *conn)
+{
+  if (!conn->dns_server_port)
+    return;
+  void * server_port_ready_callback = 
+    kitsune_lookup_key_new("eventdns.c/server_port_ready_callback");
+  
+  struct evdns_server_port *sp = conn->dns_server_port;
+  sp->event.ev_callback = server_port_ready_callback;
+}
+
+void
+migrate_evdns_request_user_callback(struct evdns_request *req)
+{
+  char *old_key;
+  void *new_fun;
+
+  /* blithley assign the new function; don't bother checking for null */
+  old_key = kitsune_lookup_addr_old(req->user_callback);
+  new_fun = kitsune_lookup_key_new(old_key);
+  req->user_callback = new_fun;
+}
+
+}
+
+
+struct event.ev_base -> struct event.ev_base, 
+  struct event.ev_arg -> struct event.ev_arg,
+  struct event.ev_next -> struct event.ev_next,
+  struct event.ev_active_next -> struct event.ev_active_next,
+  struct event.ev_signal_next -> struct event.ev_signal_next,
+  struct event.ev_pncalls -> struct event.ev_pncalls,
+  struct event.ev_timeout_pos -> struct ev_timeout_pos,
+  struct evdns_request.user_pointer -> struct evdns_request.user_pointer,
+  struct evdns_server_port.user_data -> struct evdns_server_port.user_data,
+  struct server_request.answer -> struct server_request.answer,
+  struct server_request.authority -> struct server_request.authority,
+  struct server_request.additional -> struct server_request.additional,
+  relay.c/cell_pool -> relay.c/cell_pool,
+  memarea.c/freelist -> memarea.c/freelist,
+  struct smartlist_t.list -> struct smartlist_t.list:
+{
+  XF_ASSIGN($out, $in);
+}
+
+main.c/connection_array -> main.c/connection_array,
+  main.c/active_linked_connection_lst -> main.c/active_linked_connection_lst,
+  main.c/closeable_connection_lst -> main.c/closeable_connection_lst: 
+{
+  memcpy(&$out, &$in, sizeof(smartlist_t *));
+  migrate_connection_smartlist($out);
+}
+
+tortls.c/global_tls_context -> tortls.c/global_tls_context: {
+  void * always_accept_verify_cb =
+    kitsune_lookup_key_new("tortls.c/always_accept_verify_cb");
+  
+  memcpy(&$out, &$in, sizeof(void *));
+  SSL_CTX_set_verify($out->ctx, SSL_VERIFY_PEER,
+		     always_accept_verify_cb);
+}
+
+main.c/handle_signals#signal_events -> main.c/handle_signals#signal_events: {
+  int i;
+  struct event ** new_signal_events = &$out;
+  struct event ** old_signal_events = 
+    kitsune_lookup_key_old("main.c/handle_signals#signal_events");
+  int * signals = kitsune_lookup_key_old("main.c/handle_signals#signals");
+  void * signal_callback = kitsune_lookup_key_new("main.c/signal_callback");
+  
+  memcpy(new_signal_events, old_signal_events, sizeof(struct event *));
+  for (i = 0; signals[i] >= 0 ; i++) {
+    ((*new_signal_events)[i]).ev_callback = signal_callback;
+  }
+}
+
+dns.c/dns_launch_correctness_checks/launch_event -> dns.c/dns_launch_correctness_checks/launch_event: {
+  XF_ASSIGN($out, $in);
+  if ($out) 
+    $out->ev_callback = kitsune_lookup_key_new("dns.c/launch_test_addresses");
+}
+
+main.c/timeout_event -> main.c/timeout_event: {
+  XF_ASSIGN($out, $in);
+  if ($out)
+    $out->ev_callback = kitsune_lookup_key_new("main.c/second_elapsed_callback");
+}
+
+eventdns.c/server_head -> eventdns.c/server_head: {
+  void * nameserver_prod_callback = 
+    kitsune_lookup_key_new("eventdns.c/nameserver_prod_callback");
+  void * nameserver_ready_callback =
+    kitsune_lookup_key_new("eventdns.c/nameserver_ready_callback");
+  XF_ASSIGN($out, $in);
+
+  struct nameserver * first, *iter;
+  if ((first = $out) != NULL) {
+    first->event.ev_callback = nameserver_ready_callback;
+    
+    for(iter = first->next; iter != first; iter = iter->next) {
+      iter->event.ev_callback = nameserver_ready_callback;
+      iter->timeout_event.ev_callback = nameserver_prod_callback;
+    }
+  }
+
+}
+
+
+eventdns.c/req_head -> eventdns.c/req_head,
+  eventdns.c/req_waiting_head -> eventdns.c/req_waiting_head: {
+  struct evdns_request *iter;
+  evdns_callback_type evdns_request_timeout_callback = 
+    kitsune_lookup_key_new("eventdns.c/evdns_request_timeout_callback");
+
+  XF_ASSIGN($out, $in);
+  if ($out == NULL)
+    return;
+
+  $out->timeout_event.ev_callback = 
+    evdns_request_timeout_callback;
+  migrate_evdns_request_user_callback($out);
+  
+  for (iter = $out->next; iter != $out;
+       iter = iter->next) {                                           
+    iter->timeout_event.ev_callback = evdns_request_timeout_callback; 
+    migrate_evdns_request_user_callback(iter);                        
+  }                                                                   
+}
+
+struct event -> struct event: {}
+

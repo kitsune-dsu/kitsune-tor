@@ -1,0 +1,22 @@
+# To run this, do 
+# . ./build_tor
+# from your shell, and hit enter once you've seen all the configure
+# scripts exit
+
+# Configure everything in parallel
+for i in tor-*/; do
+    pushd $i &&
+    (./autogen.sh || true) && ./configure --disable-threads >/dev/null &&
+    echo done $i && 
+    popd &
+done
+
+read
+# build everything in (sorta) serial
+for i in tor-*/; do
+    pushd $i &&
+    make -C src/or micro-revision.i && make -j16 &&
+    popd 
+done
+
+notify-send -i gnome-terminal "Tor build complete" "All systems fully operational."

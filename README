@@ -1,0 +1,47 @@
+Kitsune-enabled Tor
+===================
+
+This is a version of the Tor anonymity network patched to support
+dynamic updating using Kitsune.
+
+Building
+========
+
+To build all versions, run the 'build_tor' script in the root
+directory. To build a specific version, change directory to it's
+subdirectory and run either `./autogen.sh && ./configure && make` or
+just `./configure && make`, depending on the version.
+
+If Kitsune is not installed in your PATH, the environment variable
+KITSUNE_PATH must refer to a valid Kitsune installation (the `bin`
+directory of the core Kitsune repository will work).
+
+Tor's build dependencies are libevent and openssl.
+
+The build process will produce `tor`, the standard Tor binary,
+`tor.so`, a shared object to be used with Kitsune, and
+`tor-update.so`, a copy of `tor.so`.
+
+Running
+=======
+
+Building Tor results in a standard Tor binary in
+`tor-<version>/src/or/tor`, and a dynamically-updatable shared object
+in `tor-<version>/src/or/tor.so`. To run a dynamically updatable Tor
+instance, use the Kitsune driver utility:
+
+`driver tor.so torrc`
+
+Updating
+========
+
+To update Tor, use Kitsune's `doupd` script:
+
+`doupd <Tor pid> <new tor version.so>`
+
+For a dynamic update to work, the target version must have been built
+with the running version specified as its previous version. All
+versions of Tor are, by default, built to update from the last
+available version. The `tor-update.so` file produced by the build
+process in each version directory can be used to "update" any version
+to itself.

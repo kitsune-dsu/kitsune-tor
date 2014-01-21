@@ -1,0 +1,24 @@
+TestingTorNetwork 1
+
+DirServer umdtord v3ident=CEC822C97B9272B4AA061CC2F66BD5EA7C348314 orport=5000 127.0.0.1:9035 1A39 C9DB 9C85 35AA 9DC5 38E6 2ED1 F985 E3EE 67CB
+
+
+Nickname umdtord
+V3AuthoritativeDirectory 1
+V2AuthoritativeDirectory 1
+AuthoritativeDirectory 1
+
+ContactInfo tedks@cs.umd.edu
+
+SocksPort 0
+ORPort 5000
+DirPort 9035
+
+Address 127.0.0.1
+AssumeReachable 1
+
+DataDirectory /home/tedks/Projects/plum/workdir/examples/tor/directory-data
+
+Log info file /home/tedks/Projects/plum/workdir/examples/tor/directory-data/log
+SafeLogging 0 # log address and hidden service IDs for debugging
+__DisablePredictedCircuits 1

@@ -1,0 +1,34 @@
+SocksPort 9055
+SocksListenAddress 127.0.0.1
+RunAsDaemon 0
+DoDSU 1
+#DSUTarget /path/to/file
+## DSUTarget is set by torciden, not torrc, typically
+
+# Change these to reflect your path to directory
+Log debug file /home/tedks/Projects/plum/workdir/examples/tor/data/log
+DataDirectory /home/tedks/Projects/plum/workdir/examples/tor/data/
+SafeLogging 0 # log address and hidden service IDs for debugging
+
+## Uncomment these to run a location-hidden service
+# HiddenServiceDir /home/tedks/Projects/plum/workdir/examples/tor/data/hs/
+# HiddenServicePort 8888
+
+## Uncomment these to run a Tor relay
+#ORPort 9091
+#NickName UMDDSUTestNode
+Address 129.2.140.219
+RelayBandwidthRate 100 KBytes
+ContactInfo Ted Smith <tedks AT cs DOT umd dot edu>
+
+ControlPort 9100
+CookieAuthentication 1
+
+## And this to run a Tor exit relay
+# ExitPolicy accept *:22  # accept SSH exits
+# ExitPolicy accept *:80  # accept web exits
+# ExitPolicy accept *:443 # accept HTTPS
+# ExitPolicy reject *:*   # but nothing else
+
+## Uncomment this to run a Tor Directory mirror
+DirPort 9035
